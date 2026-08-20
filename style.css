@@ -39,6 +39,40 @@ html, body {
   touch-action: none;
 }
 
+/* --- ammo counter, upper right --- */
+.ammo {
+  position: absolute;
+  top: max(18px, 3vw);
+  right: max(18px, 3vw);
+  z-index: 5;
+  width: clamp(52px, 5.5vw, 84px);
+  height: auto;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* --- out-of-ammo message, shown once the sheet is gone --- */
+.outofammo {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6vmin;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.8s ease;
+}
+
+.outofammo[hidden] { display: none; }
+.outofammo.show { opacity: 1; }
+
+.outofammo img {
+  width: min(78vw, 720px);
+  height: auto;
+}
+
 /* --- order button: the same letterpress ink as the printed contact lines --- */
 .order-btn {
   position: absolute;

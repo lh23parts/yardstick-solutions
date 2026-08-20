@@ -130,7 +130,12 @@ function resize() {
   canvas.style.width = cssW + 'px';
   canvas.style.height = cssH + 'px';
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  redraw();
+  // Once the sheet has been crumpled away it must not come back on resize.
+  if (crumpled) {
+    ctx.clearRect(0, 0, cssW, cssH);
+  } else if (!crumpling) {
+    redraw();
+  }
 }
 
 // The paper texture is a pre-flattened, tone-matched square of the poster's own
@@ -259,6 +264,18 @@ function redraw() {
   }
 }
 
+// --- ammo ---
+const MAX_AMMO = 6;
+let ammo = MAX_AMMO;
+let crumpling = false, crumpled = false;
+const ammoEl = document.getElementById('ammo');
+
+function setAmmo(n) {
+  ammo = n;
+  ammoEl.src = `ammo-${n}.png`;
+  ammoEl.alt = `${n} of ${MAX_AMMO} shots remaining`;
+}
+
 function shoot(x, y) {
   if (!sprites.length) return;
   const spriteIndex = Math.floor(Math.random() * sprites.length);
@@ -345,32 +362,40 @@ let fireTimer = null;
 let pointerX = 0, pointerY = 0;
 let modalOpen = false;
 
+// Returns false when the magazine is empty, which also ends a held burst.
 function fireOnce(x, y, punchy) {
+  if (ammo <= 0 || crumpling || crumpled) return false;
   shoot(x, y);
   playShot(punchy);
+  setAmmo(ammo - 1);
+  if (ammo === 0) {
+    stopFiring();
+    setTimeout(startCrumple, 550);
+  }
+  return true;
 }
 
 function scheduleNextRound() {
   const interval = 85 + Math.random() * 45;
   fireTimer = setTimeout(() => {
     if (!firing) return;
-    fireOnce(
+    const fired = fireOnce(
       pointerX + (Math.random() * 30 - 15),
       pointerY + (Math.random() * 30 - 15),
       true
     );
-    scheduleNextRound();
+    if (fired) scheduleNextRound();
   }, interval);
 }
 
 function startFiring(x, y) {
-  if (modalOpen) return;
+  if (modalOpen || ammo <= 0 || crumpling || crumpled) return;
   ensureAudio();
   pointerX = x;
   pointerY = y;
   firing = true;
-  fireOnce(x, y, false);
-  scheduleNextRound();
+  firing = fireOnce(x, y, false);
+  if (firing) scheduleNextRound();
 }
 
 function stopFiring() {
@@ -400,6 +425,175 @@ canvas.addEventListener('pointercancel', stopFiring);
 canvas.addEventListener('pointerleave', stopFiring);
 
 window.addEventListener('resize', resize);
+
+// --- crumple: warp the shot-up sheet into a ball, leaving only sky ---
+const GRID_X = 13, GRID_Y = 17;   // mesh resolution
+const CRUMPLE_MS = 2600;
+let sheetTex = null;              // snapshot of the sheet at the moment ammo ran out
+let sheetW = 0, sheetH = 0;       // its own size, so a mid-animation resize cannot skew the source rects
+let crumpleStart = 0;
+
+// Deterministic per-vertex noise so the folds stay put between frames.
+function hash2(ix, iy, seed) {
+  let h = ix * 374761393 + iy * 668265263 + seed * 1442695040888963407;
+  h = (h ^ (h >> 13)) * 1274126177;
+  return ((h ^ (h >> 16)) & 0xffff) / 0xffff;
+}
+
+function smoothNoise(u, v, freq, seed) {
+  const x = u * freq, y = v * freq;
+  const x0 = Math.floor(x), y0 = Math.floor(y);
+  const fx = x - x0, fy = y - y0;
+  const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+  const n00 = hash2(x0, y0, seed), n10 = hash2(x0 + 1, y0, seed);
+  const n01 = hash2(x0, y0 + 1, seed), n11 = hash2(x0 + 1, y0 + 1, seed);
+  return (n00 * (1 - sx) + n10 * sx) * (1 - sy) + (n01 * (1 - sx) + n11 * sx) * sy;
+}
+
+function fbm(u, v, seed) {
+  return smoothNoise(u, v, 3, seed) * 0.6 +
+         smoothNoise(u, v, 7, seed + 91) * 0.3 +
+         smoothNoise(u, v, 15, seed + 197) * 0.1;
+}
+
+function startCrumple() {
+  if (crumpling || crumpled) return;
+  // snapshot the sheet as it stands, holes and all
+  sheetTex = document.createElement('canvas');
+  sheetW = sheetTex.width = cssW;
+  sheetH = sheetTex.height = cssH;
+  const t = sheetTex.getContext('2d');
+  t.drawImage(canvas, 0, 0, cssW, cssH);
+
+  crumpling = true;
+  crumpleStart = performance.now();
+  requestAnimationFrame(crumpleFrame);
+}
+
+// Map a source triangle onto a destination triangle with an affine transform.
+function drawWarpedTriangle(tex, s0, s1, s2, d0, d1, d2) {
+  const det = (s1[0] - s0[0]) * (s2[1] - s0[1]) - (s2[0] - s0[0]) * (s1[1] - s0[1]);
+  if (!det) return;
+  const a = ((d1[0] - d0[0]) * (s2[1] - s0[1]) - (d2[0] - d0[0]) * (s1[1] - s0[1])) / det;
+  const b = ((d1[1] - d0[1]) * (s2[1] - s0[1]) - (d2[1] - d0[1]) * (s1[1] - s0[1])) / det;
+  const c = ((d2[0] - d0[0]) * (s1[0] - s0[0]) - (d1[0] - d0[0]) * (s2[0] - s0[0])) / det;
+  const d = ((d2[1] - d0[1]) * (s1[0] - s0[0]) - (d1[1] - d0[1]) * (s2[0] - s0[0])) / det;
+  const e = d0[0] - a * s0[0] - c * s0[1];
+  const f = d0[1] - b * s0[0] - d * s0[1];
+
+  // Sample only this cell's slice of the texture rather than the whole sheet.
+  const sx = Math.max(0, Math.floor(Math.min(s0[0], s1[0], s2[0])) - 1);
+  const sy = Math.max(0, Math.floor(Math.min(s0[1], s1[1], s2[1])) - 1);
+  const sw = Math.min(tex.width - sx, Math.ceil(Math.max(s0[0], s1[0], s2[0])) + 1 - sx);
+  const sh = Math.min(tex.height - sy, Math.ceil(Math.max(s0[1], s1[1], s2[1])) + 1 - sy);
+  if (sw <= 0 || sh <= 0) return;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(d0[0], d0[1]);
+  ctx.lineTo(d1[0], d1[1]);
+  ctx.lineTo(d2[0], d2[1]);
+  ctx.closePath();
+  ctx.clip();
+  ctx.transform(a, b, c, d, e, f);
+  ctx.drawImage(tex, sx, sy, sw, sh, sx, sy, sw, sh);
+  ctx.restore();
+}
+
+function crumpleFrame(now) {
+  const raw = Math.min(1, (now - crumpleStart) / CRUMPLE_MS);
+  const ease = raw * raw * (3 - 2 * raw);
+
+  // scrunch first, then close the fist and toss it away
+  const squeeze = Math.min(1, ease / 0.62);          // collapse toward the centre
+  const wrinkle = Math.min(1, ease / 0.45);          // ramps up and holds: paper does not un-crumple
+  const toss = Math.max(0, (ease - 0.72) / 0.28);
+
+  const cx = cssW / 2, cy = cssH * 0.46;
+  // Converge on a roughly square ball rather than a shrunken rectangle.
+  const ballR = Math.min(cssW, cssH) * 0.09;
+  const ex = cssW / 2 + (ballR - cssW / 2) * squeeze;
+  const ey = cssH / 2 + (ballR - cssH / 2) * squeeze;
+  const spin = squeeze * 0.5 + toss * 1.6;
+  const tossX = toss * cssW * 0.5;
+  const tossY = toss * toss * cssH * 1.15 - toss * cssH * 0.25;
+
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssW, cssH);
+  ctx.globalAlpha = 1 - Math.max(0, (ease - 0.88) / 0.12);
+
+  const cos = Math.cos(spin), sin = Math.sin(spin);
+  const pts = [];
+  for (let iy = 0; iy <= GRID_Y; iy++) {
+    for (let ix = 0; ix <= GRID_X; ix++) {
+      const u = ix / GRID_X, v = iy / GRID_Y;
+      // sheet position, relative to centre, collapsing toward a ball
+      let px = (u - 0.5) * 2 * ex, py = (v - 0.5) * 2 * ey;
+      // folds: smooth noise pushes the surface around as it is squeezed
+      const nx = (fbm(u, v, 11) - 0.5) * 2, ny = (fbm(u, v, 53) - 0.5) * 2;
+      const amp = wrinkle * squeeze * Math.min(cssW, cssH) * 0.11;
+      px += nx * amp;
+      py += ny * amp;
+      // pull edges in harder than the middle, the way paper gathers
+      const edge = Math.max(Math.abs(u - 0.5), Math.abs(v - 0.5)) * 2;
+      px *= 1 - 0.25 * squeeze * edge;
+      py *= 1 - 0.25 * squeeze * edge;
+      pts.push([
+        cx + px * cos - py * sin + tossX,
+        cy + px * sin + py * cos + tossY,
+        u, v
+      ]);
+    }
+  }
+
+  const idx = (ix, iy) => pts[iy * (GRID_X + 1) + ix];
+  for (let iy = 0; iy < GRID_Y; iy++) {
+    for (let ix = 0; ix < GRID_X; ix++) {
+      const p00 = idx(ix, iy), p10 = idx(ix + 1, iy);
+      const p01 = idx(ix, iy + 1), p11 = idx(ix + 1, iy + 1);
+      const s00 = [p00[2] * sheetW, p00[3] * sheetH];
+      const s10 = [p10[2] * sheetW, p10[3] * sheetH];
+      const s01 = [p01[2] * sheetW, p01[3] * sheetH];
+      const s11 = [p11[2] * sheetW, p11[3] * sheetH];
+
+      drawWarpedTriangle(sheetTex, s00, s10, s01, p00, p10, p01);
+      drawWarpedTriangle(sheetTex, s11, s10, s01, p11, p10, p01);
+
+      // Shade by how much the cell compressed: tight folds go dark, and the
+      // ones that splay out catch the light.
+      const expected = (2 * ex / GRID_X) * (2 * ey / GRID_Y);
+      const area = Math.abs(
+        (p10[0] - p00[0]) * (p01[1] - p00[1]) - (p01[0] - p00[0]) * (p10[1] - p00[1])
+      );
+      const ratio = area / (expected + 0.0001);
+      ctx.beginPath();
+      ctx.moveTo(p00[0], p00[1]);
+      ctx.lineTo(p10[0], p10[1]);
+      ctx.lineTo(p11[0], p11[1]);
+      ctx.lineTo(p01[0], p01[1]);
+      ctx.closePath();
+      if (ratio < 1) {
+        ctx.fillStyle = `rgba(60,14,4,${Math.min(0.66, (1 - ratio) * 0.85) * squeeze})`;
+      } else {
+        ctx.fillStyle = `rgba(255,225,190,${Math.min(0.3, (ratio - 1) * 0.3) * squeeze})`;
+      }
+      ctx.fill();
+    }
+  }
+
+  ctx.globalAlpha = 1;
+
+  if (raw < 1) {
+    requestAnimationFrame(crumpleFrame);
+  } else {
+    crumpling = false;
+    crumpled = true;
+    ctx.clearRect(0, 0, cssW, cssH);   // only sky left
+    const msg = document.getElementById('outOfAmmo');
+    msg.hidden = false;
+    requestAnimationFrame(() => msg.classList.add('show'));
+  }
+}
 
 // --- T-shirt order window ---
 const overlay = document.getElementById('overlay');
