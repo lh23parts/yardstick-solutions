@@ -132,12 +132,113 @@ function resize() {
   redraw();
 }
 
+// A text-free square of the poster's own paper, mirrored into a seamless tile
+// so the letterbox area carries the same grain as the printed sheet.
+const PATCH = { x: 640, y: 112, size: 400 };
+let paperTile = null;
+
+// Average tone of the poster's unprinted paper, so the tiled surround can be
+// matched to it rather than to the (slightly brighter) sampled patch.
+function posterPaperMean(posterImg) {
+  const c = document.createElement('canvas');
+  c.width = posterImg.width;
+  c.height = posterImg.height;
+  const cx = c.getContext('2d');
+  cx.drawImage(posterImg, 0, 0);
+  const d = cx.getImageData(0, 0, c.width, c.height).data;
+  let sr = 0, sg = 0, sb = 0, n = 0;
+  for (let i = 0; i < d.length; i += 4) {
+    if (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2] > 85) {
+      sr += d[i]; sg += d[i + 1]; sb += d[i + 2]; n++;
+    }
+  }
+  return n ? [sr / n, sg / n, sb / n] : null;
+}
+
+function buildPaperTile(posterImg) {
+  const s = PATCH.size;
+  const patch = document.createElement('canvas');
+  patch.width = s;
+  patch.height = s;
+  const pctx = patch.getContext('2d');
+  pctx.drawImage(posterImg, PATCH.x, PATCH.y, s, s, 0, 0, s, s);
+
+  const img = pctx.getImageData(0, 0, s, s);
+  const d = img.data;
+  let sr = 0, sg = 0, sb = 0, n = 0;
+  for (let i = 0; i < d.length; i += 4) {
+    const lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+    if (lum >= 60) { sr += d[i]; sg += d[i + 1]; sb += d[i + 2]; n++; }
+  }
+  const mr = sr / n, mg = sg / n, mb = sb / n;
+
+  // Shift the patch onto the poster's mean paper tone so no edge shows where
+  // the tiled surround meets the sheet.
+  const gm = posterPaperMean(posterImg);
+  const dr = gm ? gm[0] - mr : 0, dg = gm ? gm[1] - mg : 0, db = gm ? gm[2] - mb : 0;
+
+  for (let i = 0; i < d.length; i += 4) {
+    const lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+    if (lum < 60) {
+      // Despeckle: dark flecks would otherwise repeat on a visible grid.
+      const j = Math.random() * 8 - 4;
+      d[i] = mr + j; d[i + 1] = mg + j; d[i + 2] = mb + j;
+    }
+    d[i] += dr;
+    d[i + 1] += dg;
+    d[i + 2] += db;
+  }
+  pctx.putImageData(img, 0, 0);
+
+  // Mirror into a 2x2 tile so opposite edges match and tiling leaves no seam.
+  const tile = document.createElement('canvas');
+  tile.width = s * 2;
+  tile.height = s * 2;
+  const tctx = tile.getContext('2d');
+  tctx.drawImage(patch, 0, 0);
+  tctx.save();
+  tctx.translate(s * 2, 0);
+  tctx.scale(-1, 1);
+  tctx.drawImage(patch, 0, 0);
+  tctx.restore();
+  tctx.save();
+  tctx.translate(0, s * 2);
+  tctx.scale(1, -1);
+  tctx.drawImage(patch, 0, 0);
+  tctx.restore();
+  tctx.save();
+  tctx.translate(s * 2, s * 2);
+  tctx.scale(-1, -1);
+  tctx.drawImage(patch, 0, 0);
+  tctx.restore();
+
+  paperTile = tile;
+}
+
 function drawBase() {
   ctx.globalCompositeOperation = 'source-over';
   ctx.fillStyle = BG;
   ctx.fillRect(0, 0, cssW, cssH);
   if (!poster) return;
   const scale = Math.min(cssW / poster.width, cssH / poster.height);
+
+  // Lay the paper grain across the whole viewport at the poster's own scale,
+  // so texture density matches across the seam.
+  if (paperTile) {
+    const pattern = ctx.createPattern(paperTile, 'repeat');
+    if (pattern.setTransform) {
+      pattern.setTransform(new DOMMatrix([scale, 0, 0, scale, 0, 0]));
+      ctx.fillStyle = pattern;
+      ctx.fillRect(0, 0, cssW, cssH);
+    } else {
+      ctx.save();
+      ctx.scale(scale, scale);
+      ctx.fillStyle = pattern;
+      ctx.fillRect(0, 0, cssW / scale, cssH / scale);
+      ctx.restore();
+    }
+  }
+
   const dw = poster.width * scale, dh = poster.height * scale;
   const dx = (cssW - dw) / 2, dy = (cssH - dh) / 2;
   ctx.drawImage(poster, dx, dy, dw, dh);
@@ -310,6 +411,7 @@ window.addEventListener('resize', resize);
 
 Promise.all([loadImage('yardstick.png'), loadImage('bulletholes.jpg')]).then(([posterImg, holesImg]) => {
   poster = posterImg;
+  buildPaperTile(posterImg);
   buildSprites(holesImg);
   resize();
 });
