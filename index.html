@@ -12,8 +12,109 @@
 <body>
 <div class="stage" id="stage">
   <img id="sky" src="sky.jpg" alt="" aria-hidden="true" draggable="false">
-  <canvas id="art"></canvas>
+  <canvas id="art" aria-label="Yardstick Solutions"></canvas>
+  <address class="sr-only">
+    <a href="tel:+17606138283">760 613 8283</a>
+    <a href="mailto:contact@yardsticksolutions.com">contact@yardsticksolutions.com</a>
+  </address>
+
+  <button type="button" id="orderBtn" class="order-btn">order@yardsticksolutions.com</button>
 </div>
+
+<div class="overlay" id="overlay" hidden>
+  <div class="mailwin" role="dialog" aria-modal="true" aria-label="Order a T-Shirt">
+    <div class="mailbar">
+      <div class="lights">
+        <span class="light red" id="mailClose" role="button" aria-label="Close" tabindex="0"></span>
+        <span class="light yellow"></span>
+        <span class="light green"></span>
+      </div>
+      <div class="tools">
+        <button type="button" class="tool send" id="sendBtn" title="Send" aria-label="Send">
+          <svg viewBox="0 0 24 24"><path d="M3.4 20.4 21 12 3.4 3.6 3.4 10.2 15 12 3.4 13.8Z"/></svg>
+        </button>
+        <span class="chev"><svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5"/></svg></span>
+        <span class="sep"></span>
+        <span class="tool"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="15" height="14" rx="2"/><path d="M6 9h9M6 13h6"/></svg></span>
+        <span class="chev"><svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5"/></svg></span>
+        <span class="gap"></span>
+        <span class="tool"><svg viewBox="0 0 24 24"><path d="M10 8 4 13l6 5v-3c6 0 9 1 11 4 0-7-4-11-11-11Z"/></svg></span>
+        <span class="tool"><svg viewBox="0 0 24 24"><path d="M17 8.5 10 15.5a3 3 0 0 0 4.2 4.2l7-7a5.5 5.5 0 0 0-7.8-7.8L6 12.4a8 8 0 0 0 11.3 11.3"/></svg></span>
+        <span class="tool"><svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" rx="2"/><path d="M14 16l4-4"/></svg></span>
+        <span class="tool"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.5"/><ellipse cx="12" cy="12" rx="10" ry="4.5"/><ellipse cx="12" cy="12" rx="10" ry="4.5" transform="rotate(60 12 12)"/></svg></span>
+        <span class="tool aa">Aa</span>
+        <span class="tool"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="9.3" cy="10" r="1"/><circle cx="14.7" cy="10" r="1"/><path d="M8.6 14.5a4.6 4.6 0 0 0 6.8 0"/></svg></span>
+        <span class="tool"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="16" height="12" rx="2"/><path d="M3 15l4-3.5 3.5 3 3-2.5L19 16"/></svg></span>
+        <span class="chev"><svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5"/></svg></span>
+      </div>
+    </div>
+
+    <form class="mailform" id="orderForm" novalidate>
+      <div class="row">
+        <label for="fTo">To:</label>
+        <input id="fTo" value="order@yardsticksolutions.com" readonly>
+        <span class="plus" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
+        </span>
+      </div>
+      <div class="row">
+        <label for="fCc">Cc:</label>
+        <input id="fCc" autocomplete="off">
+      </div>
+      <div class="row">
+        <label for="fSubject">Subject:</label>
+        <input id="fSubject" value="T-Shirt Order">
+      </div>
+      <div class="row">
+        <label for="fFrom">From:</label>
+        <input id="fFrom" type="email" placeholder="your@email.com" required autocomplete="email">
+      </div>
+      <div class="row">
+        <label for="fName">Name:</label>
+        <input id="fName" placeholder="Full name" required autocomplete="name">
+      </div>
+      <div class="row">
+        <label for="fAddr">Address:</label>
+        <input id="fAddr" placeholder="Street, city, state, ZIP, country" required autocomplete="shipping street-address">
+      </div>
+      <div class="row">
+        <label for="fSize">Size:</label>
+        <select id="fSize" required>
+          <option value="">Select a size</option>
+          <option>S</option><option>M</option><option selected>L</option>
+          <option>XL</option><option>2XL</option>
+        </select>
+      </div>
+      <div class="row">
+        <label for="fQty">Qty:</label>
+        <input id="fQty" type="number" min="1" max="10" value="1" required>
+      </div>
+      <div class="row note-row">
+        <label>Payment:</label>
+        <span class="pay-note">We'll email a secure payment link once we confirm your size and shipping.</span>
+      </div>
+
+      <textarea id="fBody" class="mailbody" placeholder="Tell us why you need a YS Solutions T Shirt."></textarea>
+
+      <div class="mailfoot">
+        <span class="err" id="formErr" role="alert"></span>
+        <button type="submit" class="sendtext">Send</button>
+      </div>
+    </form>
+
+    <div class="sent" id="sentPane" hidden>
+      <div class="sent-inner">
+        <div class="check" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg>
+        </div>
+        <h2>Order sent</h2>
+        <p id="sentMsg"></p>
+        <button type="button" class="sendtext" id="sentClose">Done</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="script.js"></script>
 </body>
 </html>

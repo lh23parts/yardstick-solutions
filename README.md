@@ -1,7 +1,9 @@
 # Yardstick Solutions
 
-Single-screen site: the Yardstick Solutions mark fills the viewport, with a subtle
-autonomous drift/breathing animation and cursor-driven parallax.
+Single-screen site. The poster fills the viewport on a background of its own
+paper grain; clicking shoots bullet holes through the sheet to reveal sky, and
+holding the mouse down fires on repeat. Contact details sit bottom-left, and an
+order button bottom-right opens a Mail-style compose window for T-shirt orders.
 
 ## Run locally
 
@@ -10,3 +12,54 @@ python3 -m http.server 8000
 ```
 
 Then open http://localhost:8000
+
+## Assets
+
+| File | Notes |
+| --- | --- |
+| `yardstick.png` | The poster scan. Drawn letterboxed (`contain`) so no type is cropped. |
+| `sky.jpg` | Seen through the bullet holes. |
+| `bulletholes.jpg` | Green-screen reference. Keyed and segmented in-browser at load into individual hole sprites — each is a real shape from this photo, so no two holes match. |
+| `paper-patch.png` | 400px square of the poster's own unprinted stock, used to tile the background. |
+| `contact-phone.png`, `contact-email.png` | Phone and email, keyed off their photo to transparent ink. |
+
+### Derived assets
+
+`paper-patch.png` and the two `contact-*.png` files were generated from source
+photos rather than hand-drawn, so they can be regenerated if the artwork changes.
+
+**`paper-patch.png`** — a text-free 400px square of the poster at (640, 112),
+found by scanning for the region with the fewest dark pixels. Three steps matter:
+
+1. **Despeckle.** A few dark flecks would otherwise repeat on a visible grid.
+2. **Flatten.** The scan has a mild vignette (~1 lum across the patch). Tiling
+   mirrors the patch, which reverses any gradient and leaves visible banding at
+   each mirror axis, so a fitted quadratic surface is subtracted.
+3. **Tone-match.** The patch reads ~1.5 lum brighter than the poster's mean
+   paper, which would show as an edge where surround meets sheet, so it is
+   shifted onto that mean.
+
+`script.js` mirrors it into a seamless 2x2 tile at load and fills the viewport at
+the poster's own scale, so grain density matches across the seam. The poster's
+blank outer margin is feathered (`FEATHER`) because the vignette leaves its edge
+a few lum off the flat surround, which otherwise reads as a faint line.
+
+**`contact-*.png`** — the phone/email photo was shot on different stock under
+different light (paper reads RGB ~213/71/38 vs the poster's ~235/62/12), so the
+background is keyed out entirely and only the ink is kept, recoloured to the
+poster's own letterpress black (RGB 30/9/7). Alpha comes from pixel darkness, so
+the grain survives. The two lines are cropped and trimmed separately so they can
+be set flush left, which the original photo is not.
+
+## Ordering
+
+The order window builds a `mailto:` to `order@yardsticksolutions.com` with the
+name, address, size, quantity and message. Note it hand-builds the query string:
+`URLSearchParams` encodes spaces as `+`, which mail clients do not decode in a
+mailto body (RFC 6068 wants `%20`).
+
+**No card details are collected.** This is a static site with no backend, so
+anything typed into a card field would end up in a plaintext email — unsafe for
+customers and a PCI problem. The form promises a secure payment link instead. To
+take payment on the site, wire up Stripe Checkout or Shopify and replace the
+`mailto:` in `submitOrder()`.

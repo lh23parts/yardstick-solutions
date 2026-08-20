@@ -8,6 +8,7 @@ const MIN_BLOB_PIXELS = 30;
 let dpr = Math.max(1, window.devicePixelRatio || 1);
 let cssW = 0, cssH = 0;
 let poster = null;
+let contactPhone = null, contactEmail = null;
 let sprites = [];
 const shots = []; // {fx, fy, fw, spriteIndex, rot, flip}
 
@@ -132,86 +133,52 @@ function resize() {
   redraw();
 }
 
-// A text-free square of the poster's own paper, mirrored into a seamless tile
-// so the letterbox area carries the same grain as the printed sheet.
-const PATCH = { x: 640, y: 112, size: 400 };
+// The paper texture is a pre-flattened, tone-matched square of the poster's own
+// stock (see README); mirrored here into a 2x2 tile so it repeats seamlessly.
 let paperTile = null;
 
-// Average tone of the poster's unprinted paper, so the tiled surround can be
-// matched to it rather than to the (slightly brighter) sampled patch.
-function posterPaperMean(posterImg) {
+// The scan carries a mild vignette, so the sheet's edge sits a few luminance
+// units off the flat surround and reads as a faint line. Fading the blank outer
+// margin dissolves that boundary, leaving one continuous sheet.
+const FEATHER = 28; // source pixels of the poster's blank margin
+let posterFeathered = null;
+
+function buildFeatheredPoster(posterImg) {
+  const w = posterImg.width, h = posterImg.height;
   const c = document.createElement('canvas');
-  c.width = posterImg.width;
-  c.height = posterImg.height;
-  const cx = c.getContext('2d');
-  cx.drawImage(posterImg, 0, 0);
-  const d = cx.getImageData(0, 0, c.width, c.height).data;
-  let sr = 0, sg = 0, sb = 0, n = 0;
-  for (let i = 0; i < d.length; i += 4) {
-    if (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2] > 85) {
-      sr += d[i]; sg += d[i + 1]; sb += d[i + 2]; n++;
-    }
+  c.width = w;
+  c.height = h;
+  const x = c.getContext('2d');
+  x.drawImage(posterImg, 0, 0);
+
+  x.globalCompositeOperation = 'destination-out';
+  const edges = [
+    [0, 0, FEATHER, 0, 0, 0, FEATHER, h],          // left
+    [w, 0, w - FEATHER, 0, w - FEATHER, 0, FEATHER, h], // right
+    [0, 0, 0, FEATHER, 0, 0, w, FEATHER],          // top
+    [0, h, 0, h - FEATHER, 0, h - FEATHER, w, FEATHER]  // bottom
+  ];
+  for (const [gx0, gy0, gx1, gy1, rx, ry, rw, rh] of edges) {
+    const grad = x.createLinearGradient(gx0, gy0, gx1, gy1);
+    grad.addColorStop(0, 'rgba(0,0,0,1)');
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    x.fillStyle = grad;
+    x.fillRect(rx, ry, rw, rh);
   }
-  return n ? [sr / n, sg / n, sb / n] : null;
+  x.globalCompositeOperation = 'source-over';
+  posterFeathered = c;
 }
 
-function buildPaperTile(posterImg) {
-  const s = PATCH.size;
-  const patch = document.createElement('canvas');
-  patch.width = s;
-  patch.height = s;
-  const pctx = patch.getContext('2d');
-  pctx.drawImage(posterImg, PATCH.x, PATCH.y, s, s, 0, 0, s, s);
-
-  const img = pctx.getImageData(0, 0, s, s);
-  const d = img.data;
-  let sr = 0, sg = 0, sb = 0, n = 0;
-  for (let i = 0; i < d.length; i += 4) {
-    const lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-    if (lum >= 60) { sr += d[i]; sg += d[i + 1]; sb += d[i + 2]; n++; }
-  }
-  const mr = sr / n, mg = sg / n, mb = sb / n;
-
-  // Shift the patch onto the poster's mean paper tone so no edge shows where
-  // the tiled surround meets the sheet.
-  const gm = posterPaperMean(posterImg);
-  const dr = gm ? gm[0] - mr : 0, dg = gm ? gm[1] - mg : 0, db = gm ? gm[2] - mb : 0;
-
-  for (let i = 0; i < d.length; i += 4) {
-    const lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-    if (lum < 60) {
-      // Despeckle: dark flecks would otherwise repeat on a visible grid.
-      const j = Math.random() * 8 - 4;
-      d[i] = mr + j; d[i + 1] = mg + j; d[i + 2] = mb + j;
-    }
-    d[i] += dr;
-    d[i + 1] += dg;
-    d[i + 2] += db;
-  }
-  pctx.putImageData(img, 0, 0);
-
-  // Mirror into a 2x2 tile so opposite edges match and tiling leaves no seam.
+function buildPaperTile(patchImg) {
+  const s = patchImg.width;
   const tile = document.createElement('canvas');
   tile.width = s * 2;
   tile.height = s * 2;
-  const tctx = tile.getContext('2d');
-  tctx.drawImage(patch, 0, 0);
-  tctx.save();
-  tctx.translate(s * 2, 0);
-  tctx.scale(-1, 1);
-  tctx.drawImage(patch, 0, 0);
-  tctx.restore();
-  tctx.save();
-  tctx.translate(0, s * 2);
-  tctx.scale(1, -1);
-  tctx.drawImage(patch, 0, 0);
-  tctx.restore();
-  tctx.save();
-  tctx.translate(s * 2, s * 2);
-  tctx.scale(-1, -1);
-  tctx.drawImage(patch, 0, 0);
-  tctx.restore();
-
+  const t = tile.getContext('2d');
+  t.drawImage(patchImg, 0, 0);
+  t.save(); t.translate(s * 2, 0); t.scale(-1, 1); t.drawImage(patchImg, 0, 0); t.restore();
+  t.save(); t.translate(0, s * 2); t.scale(1, -1); t.drawImage(patchImg, 0, 0); t.restore();
+  t.save(); t.translate(s * 2, s * 2); t.scale(-1, -1); t.drawImage(patchImg, 0, 0); t.restore();
   paperTile = tile;
 }
 
@@ -241,7 +208,30 @@ function drawBase() {
 
   const dw = poster.width * scale, dh = poster.height * scale;
   const dx = (cssW - dw) / 2, dy = (cssH - dh) / 2;
-  ctx.drawImage(poster, dx, dy, dw, dh);
+  ctx.drawImage(posterFeathered || poster, dx, dy, dw, dh);
+
+  drawContact();
+}
+
+// Phone and email set flush left in the bottom-left corner. Drawn into the
+// base layer (not as DOM) so shots tear through them like the rest of the print.
+const CONTACT_GAP = 23; // vertical gap between the two lines in source pixels
+
+function drawContact() {
+  if (!contactPhone || !contactEmail) return;
+  const margin = Math.max(18, Math.round(cssW * 0.03));
+  const emailW = Math.max(240, Math.min(cssW * 0.30, 460));
+  const k = emailW / contactEmail.width;
+  const phoneW = contactPhone.width * k, phoneH = contactPhone.height * k;
+  const emailH = contactEmail.height * k;
+  const gap = CONTACT_GAP * k;
+
+  const emailY = cssH - margin - emailH;
+  const phoneY = emailY - gap - phoneH;
+
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.drawImage(contactPhone, margin, phoneY, phoneW, phoneH);
+  ctx.drawImage(contactEmail, margin, emailY, emailW, emailH);
 }
 
 function stampAt(x, y, fw, spriteIndex, rot, flip) {
@@ -353,6 +343,7 @@ function playShot(punchy) {
 let firing = false;
 let fireTimer = null;
 let pointerX = 0, pointerY = 0;
+let modalOpen = false;
 
 function fireOnce(x, y, punchy) {
   shoot(x, y);
@@ -373,6 +364,7 @@ function scheduleNextRound() {
 }
 
 function startFiring(x, y) {
+  if (modalOpen) return;
   ensureAudio();
   pointerX = x;
   pointerY = y;
@@ -409,9 +401,107 @@ canvas.addEventListener('pointerleave', stopFiring);
 
 window.addEventListener('resize', resize);
 
-Promise.all([loadImage('yardstick.png'), loadImage('bulletholes.jpg')]).then(([posterImg, holesImg]) => {
+// --- T-shirt order window ---
+const overlay = document.getElementById('overlay');
+const orderBtn = document.getElementById('orderBtn');
+const orderForm = document.getElementById('orderForm');
+const sentPane = document.getElementById('sentPane');
+const formErr = document.getElementById('formErr');
+const ORDER_TO = 'order@yardsticksolutions.com';
+
+function openOrder() {
+  stopFiring();
+  modalOpen = true;
+  overlay.hidden = false;
+  sentPane.hidden = true;
+  formErr.textContent = '';
+  document.getElementById('fFrom').focus();
+}
+
+function closeOrder() {
+  overlay.hidden = true;
+  modalOpen = false;
+}
+
+orderBtn.addEventListener('click', openOrder);
+document.getElementById('mailClose').addEventListener('click', closeOrder);
+document.getElementById('sentClose').addEventListener('click', closeOrder);
+document.getElementById('sendBtn').addEventListener('click', () => submitOrder());
+document.getElementById('sentPane').addEventListener('click', (e) => e.stopPropagation());
+
+overlay.addEventListener('click', (e) => { if (e.target === overlay) closeOrder(); });
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !overlay.hidden) closeOrder();
+  if (!overlay.hidden && (e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+    e.preventDefault();
+    submitOrder();
+  }
+});
+
+orderForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  submitOrder();
+});
+
+function buildOrderMailto() {
+  const get = (id) => document.getElementById(id).value.trim();
+  const lines = [
+    `Name: ${get('fName')}`,
+    `Email: ${get('fFrom')}`,
+    `Shipping address: ${get('fAddr')}`,
+    `Size: ${get('fSize')}`,
+    `Quantity: ${get('fQty')}`,
+    '',
+    'Why I need a YS Solutions T Shirt:',
+    get('fBody') || '(no reason given)'
+  ];
+  // Build the query by hand: URLSearchParams encodes spaces as "+", which mail
+  // clients do not decode in a mailto body (RFC 6068 wants %20).
+  const q = [
+    `subject=${encodeURIComponent(get('fSubject') || 'T-Shirt Order')}`,
+    `body=${encodeURIComponent(lines.join('\n'))}`
+  ];
+  const cc = get('fCc');
+  if (cc) q.push(`cc=${encodeURIComponent(cc)}`);
+  return `mailto:${ORDER_TO}?${q.join('&')}`;
+}
+
+function submitOrder() {
+  const get = (id) => document.getElementById(id).value.trim();
+  const required = ['fFrom', 'fName', 'fAddr', 'fSize', 'fQty'];
+  let firstBad = null;
+  for (const id of required) {
+    const el = document.getElementById(id);
+    el.classList.add('touched');
+    if (!el.value.trim() || !el.checkValidity()) firstBad = firstBad || el;
+  }
+  if (firstBad) {
+    formErr.textContent = 'Please fill in your email, name, address, size and quantity.';
+    firstBad.focus();
+    return;
+  }
+
+  window.location.href = buildOrderMailto();
+
+  document.getElementById('sentMsg').textContent =
+    `Thanks, ${get('fName').split(' ')[0]} — your order is on its way to ${ORDER_TO}. ` +
+    `We'll reply to ${get('fFrom')} with a secure payment link.`;
+  sentPane.hidden = false;
+}
+
+Promise.all([
+  loadImage('yardstick.png'),
+  loadImage('bulletholes.jpg'),
+  loadImage('paper-patch.png'),
+  loadImage('contact-phone.png'),
+  loadImage('contact-email.png')
+]).then(([posterImg, holesImg, patchImg, phoneImg, emailImg]) => {
   poster = posterImg;
-  buildPaperTile(posterImg);
+  contactPhone = phoneImg;
+  contactEmail = emailImg;
+  buildFeatheredPoster(posterImg);
+  buildPaperTile(patchImg);
   buildSprites(holesImg);
   resize();
 });

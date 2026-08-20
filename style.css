@@ -39,6 +39,244 @@ html, body {
   touch-action: none;
 }
 
+/* --- order button (bottom right, stamped onto the sheet) --- */
+.order-btn {
+  position: absolute;
+  right: max(18px, 3vw);
+  bottom: max(18px, 3vw);
+  z-index: 5;
+  font: 700 clamp(11px, 1.35vw, 15px)/1 ui-sans-serif, "Helvetica Neue", Arial, sans-serif;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #1e0907;
+  background: transparent;
+  border: 2px solid #1e0907;
+  border-radius: 2px;
+  padding: 0.7em 0.95em;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, transform 0.08s ease;
+}
+
+.order-btn:hover { background: #1e0907; color: #eb3c0c; }
+.order-btn:active { transform: translateY(1px); }
+.order-btn:focus-visible { outline: 2px solid #1e0907; outline-offset: 3px; }
+
+/* --- Mail-style compose window --- */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4vmin;
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+
+.overlay[hidden] { display: none; }
+
+.mailwin {
+  position: relative;
+  width: min(700px, 96vw);
+  height: min(760px, 90vh);
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 24px 70px rgba(0,0,0,0.4), 0 0 0 0.5px rgba(0,0,0,0.22);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+  color: #000;
+}
+
+.mailbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 52px;
+  padding: 0 14px;
+  background: #f6f6f6;
+  border-bottom: 1px solid #dcdcdc;
+}
+
+.lights { display: flex; gap: 8px; }
+
+.light {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: block;
+}
+
+.light.red { background: #ff5f57; cursor: pointer; }
+.light.yellow { background: #febc2e; }
+.light.green { background: #28c840; }
+
+.tools {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-left: 10px;
+  color: #6f6f73;
+}
+
+.tool, .chev {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+}
+
+.tool svg, .chev svg {
+  width: 21px;
+  height: 21px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chev svg { width: 13px; height: 13px; }
+.tool.aa { font-size: 17px; font-weight: 500; letter-spacing: -0.01em; }
+
+.tool.send {
+  cursor: pointer;
+  color: #7c7c80;
+}
+
+.tool.send svg { fill: currentColor; stroke: none; width: 23px; height: 23px; }
+.tool.send:hover { color: #0a7cff; }
+
+.sep { width: 1px; height: 20px; background: #d3d3d3; }
+.gap { width: 18px; }
+
+.mailform {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.row {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+  min-height: 40px;
+  border-bottom: 1px solid #ececec;
+}
+
+.row label {
+  flex: 0 0 76px;
+  font-size: 15px;
+  color: #7a7a7e;
+}
+
+.row input, .row select {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  font: 15px -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  color: #000;
+  padding: 9px 0;
+}
+
+.row select { appearance: none; cursor: pointer; }
+.row input::placeholder { color: #bcbcc0; }
+.row input:read-only { color: #000; }
+
+.row input:invalid.touched, .row select:invalid.touched { color: #d70015; }
+
+.plus { display: inline-flex; color: #0a7cff; }
+.plus svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.5; }
+
+.note-row .pay-note {
+  flex: 1 1 auto;
+  font-size: 13px;
+  color: #8a8a8e;
+  line-height: 1.35;
+  padding: 9px 0;
+}
+
+.mailbody {
+  flex: 1 1 auto;
+  min-height: 180px;
+  border: 0;
+  outline: 0;
+  resize: none;
+  padding: 16px;
+  font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  color: #000;
+}
+
+.mailbody::placeholder { color: #bcbcc0; }
+
+.mailfoot {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 10px 16px;
+  border-top: 1px solid #ececec;
+  background: #fbfbfb;
+}
+
+.err { font-size: 13px; color: #d70015; margin-right: auto; }
+
+.sendtext {
+  font: 500 14px -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  color: #fff;
+  background: #0a7cff;
+  border: 0;
+  border-radius: 6px;
+  padding: 7px 18px;
+  cursor: pointer;
+}
+
+.sendtext:hover { background: #0069e0; }
+
+.sent { position: absolute; inset: 0; background: #fff; display: flex; align-items: center; justify-content: center; }
+.sent[hidden] { display: none; }
+.sent-inner { text-align: center; padding: 32px; max-width: 420px; }
+.check { width: 54px; height: 54px; margin: 0 auto 18px; border-radius: 50%; background: #28c840; display: flex; align-items: center; justify-content: center; }
+.check svg { width: 30px; height: 30px; fill: none; stroke: #fff; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.sent h2 { font-size: 20px; font-weight: 600; margin-bottom: 10px; }
+.sent p { font-size: 14px; line-height: 1.5; color: #6a6a6e; margin-bottom: 22px; }
+
+@media (max-width: 520px) {
+  .mailwin { height: 92vh; }
+  .row label { flex-basis: 66px; font-size: 14px; }
+  .tools .gap { display: none; }
+  .tools { gap: 6px; }
+  .tool svg { width: 18px; height: 18px; }
+}
+
+/* Contact info is painted into the canvas; this keeps it readable to
+   screen readers and crawlers without covering the shootable surface. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .flash {
   position: absolute;
   width: 160px;
