@@ -193,10 +193,118 @@ function muzzleFlash(x, y) {
   stage.classList.add('shake');
 }
 
-canvas.addEventListener('click', (e) => {
+// --- procedural gunshot audio (no external sound files) ---
+let audioCtx = null;
+
+function ensureAudio() {
+  if (!audioCtx) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    audioCtx = new AC();
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+function playShot(punchy) {
+  if (!audioCtx) return;
+  const ac = audioCtx;
+  const now = ac.currentTime;
+  const duration = punchy ? 0.11 + Math.random() * 0.03 : 0.16 + Math.random() * 0.05;
+
+  const bufferSize = Math.floor(ac.sampleRate * duration);
+  const buffer = ac.createBuffer(1, bufferSize, ac.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) {
+    const decay = Math.pow(1 - i / bufferSize, 2.2);
+    data[i] = (Math.random() * 2 - 1) * decay;
+  }
+  const noise = ac.createBufferSource();
+  noise.buffer = buffer;
+
+  const bandpass = ac.createBiquadFilter();
+  bandpass.type = 'bandpass';
+  bandpass.frequency.value = (punchy ? 1500 : 1100) + Math.random() * 500;
+  bandpass.Q.value = 0.5;
+
+  const noiseGain = ac.createGain();
+  noiseGain.gain.setValueAtTime(1, now);
+  noiseGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+  noise.connect(bandpass).connect(noiseGain).connect(ac.destination);
+
+  const thump = ac.createOscillator();
+  thump.type = 'sine';
+  thump.frequency.setValueAtTime(130 + Math.random() * 20, now);
+  thump.frequency.exponentialRampToValueAtTime(35, now + duration * 0.7);
+
+  const thumpGain = ac.createGain();
+  thumpGain.gain.setValueAtTime(0.9, now);
+  thumpGain.gain.exponentialRampToValueAtTime(0.001, now + duration * 0.8);
+
+  thump.connect(thumpGain).connect(ac.destination);
+
+  noise.start(now);
+  noise.stop(now + duration);
+  thump.start(now);
+  thump.stop(now + duration);
+}
+
+// --- click / click-and-hold machine-gun fire ---
+let firing = false;
+let fireTimer = null;
+let pointerX = 0, pointerY = 0;
+
+function fireOnce(x, y, punchy) {
+  shoot(x, y);
+  playShot(punchy);
+}
+
+function scheduleNextRound() {
+  const interval = 85 + Math.random() * 45;
+  fireTimer = setTimeout(() => {
+    if (!firing) return;
+    fireOnce(
+      pointerX + (Math.random() * 30 - 15),
+      pointerY + (Math.random() * 30 - 15),
+      true
+    );
+    scheduleNextRound();
+  }, interval);
+}
+
+function startFiring(x, y) {
+  ensureAudio();
+  pointerX = x;
+  pointerY = y;
+  firing = true;
+  fireOnce(x, y, false);
+  scheduleNextRound();
+}
+
+function stopFiring() {
+  firing = false;
+  clearTimeout(fireTimer);
+}
+
+function localCoords(e) {
   const rect = canvas.getBoundingClientRect();
-  shoot(e.clientX - rect.left, e.clientY - rect.top);
+  return [e.clientX - rect.left, e.clientY - rect.top];
+}
+
+canvas.addEventListener('pointerdown', (e) => {
+  canvas.setPointerCapture(e.pointerId);
+  const [x, y] = localCoords(e);
+  startFiring(x, y);
 });
+
+canvas.addEventListener('pointermove', (e) => {
+  const [x, y] = localCoords(e);
+  pointerX = x;
+  pointerY = y;
+});
+
+canvas.addEventListener('pointerup', stopFiring);
+canvas.addEventListener('pointercancel', stopFiring);
+canvas.addEventListener('pointerleave', stopFiring);
 
 window.addEventListener('resize', resize);
 
