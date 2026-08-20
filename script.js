@@ -409,14 +409,37 @@ const sentPane = document.getElementById('sentPane');
 const formErr = document.getElementById('formErr');
 const ORDER_TO = 'order@yardsticksolutions.com';
 
+const mailwin = document.querySelector('.mailwin');
+const WIN_PAD = 12;
+
+// Drop the window somewhere new on every open, always fully on screen.
+// randomize=false just re-clamps the current spot (used on resize).
+function placeWindow(randomize) {
+  const maxX = Math.max(WIN_PAD, window.innerWidth - mailwin.offsetWidth - WIN_PAD);
+  const maxY = Math.max(WIN_PAD, window.innerHeight - mailwin.offsetHeight - WIN_PAD);
+  let x, y;
+  if (randomize) {
+    x = WIN_PAD + Math.random() * (maxX - WIN_PAD);
+    y = WIN_PAD + Math.random() * (maxY - WIN_PAD);
+  } else {
+    x = Math.min(parseFloat(mailwin.style.left) || WIN_PAD, maxX);
+    y = Math.min(parseFloat(mailwin.style.top) || WIN_PAD, maxY);
+  }
+  mailwin.style.left = Math.round(Math.max(WIN_PAD, x)) + 'px';
+  mailwin.style.top = Math.round(Math.max(WIN_PAD, y)) + 'px';
+}
+
 function openOrder() {
   stopFiring();
   modalOpen = true;
   overlay.hidden = false;
   sentPane.hidden = true;
   formErr.textContent = '';
-  document.getElementById('fFrom').focus();
+  placeWindow(true);
+  document.getElementById('fFrom').focus({ preventScroll: true });
 }
+
+window.addEventListener('resize', () => { if (modalOpen) placeWindow(false); });
 
 function closeOrder() {
   overlay.hidden = true;

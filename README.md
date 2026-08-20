@@ -22,6 +22,7 @@ Then open http://localhost:8000
 | `bulletholes.jpg` | Green-screen reference. Keyed and segmented in-browser at load into individual hole sprites — each is a real shape from this photo, so no two holes match. |
 | `paper-patch.png` | 400px square of the poster's own unprinted stock, used to tile the background. |
 | `contact-phone.png`, `contact-email.png` | Phone and email, keyed off their photo to transparent ink. |
+| `order-button.png` | The order button's label, set to match the printed ink. |
 
 ### Derived assets
 
@@ -50,6 +51,14 @@ background is keyed out entirely and only the ink is kept, recoloured to the
 poster's own letterpress black (RGB 30/9/7). Alpha comes from pixel darkness, so
 the grain survives. The two lines are cropped and trimmed separately so they can
 be set flush left, which the original photo is not.
+
+**`order-button.png`** — the label had to be set rather than lifted from a photo,
+because the artwork contains no letter "E" anywhere to compose "ORDER" from.
+Impact at 88% horizontal scale matches the poster's face closely (the poster runs
+~33px per character at 62px cap height; Impact runs ~39px, hence the squeeze).
+Ink is the poster's black, and the letterpress breakup was tuned to the measured
+statistics of `contact-email.png`'s ink — mean alpha 0.95 inside strokes, ~12%
+of pixels below 0.85 — so it reads as the same printing, not a clean web font.
 
 ## Ordering
 

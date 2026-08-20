@@ -39,37 +39,41 @@ html, body {
   touch-action: none;
 }
 
-/* --- order button (bottom right, stamped onto the sheet) --- */
+/* --- order button: the same letterpress ink as the printed contact lines --- */
 .order-btn {
   position: absolute;
   right: max(18px, 3vw);
   bottom: max(18px, 3vw);
   z-index: 5;
-  font: 700 clamp(11px, 1.35vw, 15px)/1 ui-sans-serif, "Helvetica Neue", Arial, sans-serif;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: #1e0907;
-  background: transparent;
-  border: 2px solid #1e0907;
-  border-radius: 2px;
-  padding: 0.7em 0.95em;
+  width: clamp(210px, 26vw, 420px);
+  padding: 0;
+  border: 0;
+  background: none;
+  line-height: 0;
   cursor: pointer;
-  transition: background 0.12s ease, color 0.12s ease, transform 0.08s ease;
+  transition: opacity 0.12s ease, transform 0.08s ease;
 }
 
-.order-btn:hover { background: #1e0907; color: #eb3c0c; }
+.order-btn img { width: 100%; height: auto; display: block; user-select: none; }
+.order-btn:hover { opacity: 0.66; }
 .order-btn:active { transform: translateY(1px); }
-.order-btn:focus-visible { outline: 2px solid #1e0907; outline-offset: 3px; }
+.order-btn:focus-visible { outline: 2px solid #1e0907; outline-offset: 6px; }
+
+/* On phones the contact block spans most of the width, so lift the button
+   above it instead of letting the two collide. */
+@media (max-width: 560px) {
+  .order-btn {
+    width: min(70vw, 320px);
+    bottom: calc(max(18px, 3vw) + 58px);
+  }
+}
 
 /* --- Mail-style compose window --- */
 .overlay {
   position: fixed;
   inset: 0;
   z-index: 20;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 4vmin;
+  display: block;
   background: rgba(0, 0, 0, 0.3);
   backdrop-filter: blur(3px);
   -webkit-backdrop-filter: blur(3px);
@@ -77,10 +81,14 @@ html, body {
 
 .overlay[hidden] { display: none; }
 
+/* left/top are set per-open by script.js so the window lands somewhere new
+   each time; these are only the fallback for a no-JS render. */
 .mailwin {
-  position: relative;
-  width: min(700px, 96vw);
-  height: min(760px, 90vh);
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  width: min(600px, 92vw);
+  height: min(620px, 76vh);
   display: flex;
   flex-direction: column;
   background: #fff;
@@ -256,7 +264,7 @@ html, body {
 .sent p { font-size: 14px; line-height: 1.5; color: #6a6a6e; margin-bottom: 22px; }
 
 @media (max-width: 520px) {
-  .mailwin { height: 92vh; }
+  .mailwin { height: 82vh; }
   .row label { flex-basis: 66px; font-size: 14px; }
   .tools .gap { display: none; }
   .tools { gap: 6px; }
